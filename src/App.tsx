@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, ChangeEvent, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -24,7 +24,8 @@ import {
   ArrowUpDown,
   ChevronUp,
   ChevronDown,
-  RotateCcw
+  RotateCcw,
+  ShieldAlert
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
@@ -81,6 +82,7 @@ interface TranslationDict {
     hi: string;
     ja: string;
     zh: string;
+    it?: string;
   };
 }
 
@@ -93,9 +95,10 @@ const TRANSLATIONS: TranslationDict = {
     de: "Allianz der galaktischen Reisenden",
     pt: "Aliança de Viajantes Galácticos",
     th: "พันธมิตรนักเดินทางแห่งกาแล็กซี",
-    hi: "गैलेक्टिक यात्रियों का गठबंधन",
+    hi: "गैलेक्टic यात्रियों का गठबंधन",
     ja: "銀河旅行者同盟",
-    zh: "星际旅行者联盟"
+    zh: "星际旅行者联盟",
+    it: "Alleanza dei Viaggiatori Galattici"
   },
   "AGT Region Report Tool": {
     en: "AGT Region Report Tool",
@@ -106,7 +109,68 @@ const TRANSLATIONS: TranslationDict = {
     th: "เครื่องมือรายงานภูมิภาค AGT",
     hi: "AGT क्षेत्र रिपोर्ट उपकरण",
     ja: "AGT リージョンレポートツール",
-    zh: "AGT 区域报告工具"
+    zh: "AGT 区域报告工具",
+    it: "Strumento di Rapporto della Regione AGT"
+  },
+  "Traveller Name": {
+    en: "Traveller Name",
+    fr: "Nom du Voyageur",
+    es: "Nombre del Viajero",
+    de: "Name des Reisenden",
+    pt: "Nome do Viajante",
+    th: "ชื่อผู้เดินทาง",
+    hi: "यात्री का नाम",
+    ja: "トラベラー名",
+    zh: "旅人姓名",
+    it: "Nome del Viaggiatore"
+  },
+  "AGT Traveller ID": {
+    en: "AGT Traveller ID",
+    fr: "Identifiant du Voyageur AGT",
+    es: "ID de Viajero AGT",
+    de: "AGT-Reisenden-ID",
+    pt: "ID do Viajante AGT",
+    th: "ID ผู้เดินทาง AGT",
+    hi: "AGT यात्री आईडी",
+    ja: "AGT トラベラーID",
+    zh: "AGT 旅人ID",
+    it: "Identificativo Viaggiatore AGT"
+  },
+  "Verify Traveller ID": {
+    en: "Verify Traveller ID",
+    fr: "Vérifier l'ID du Voyageur",
+    es: "Verificar ID del Viajero",
+    de: "Reisenden-ID verifizieren",
+    pt: "Verificar ID do Viajante",
+    th: "ตรวจสอบ ID ผู้เดินทาง",
+    hi: "यात्री आईडी सत्यापित करें",
+    ja: "トラベラーIDを確認",
+    zh: "验证旅人ID",
+    it: "Verifica Identificativo Viaggiatore"
+  },
+  "Traveller Name and ID and does not match, Please consult ": {
+    en: "Traveller Name and ID and does not match, Please consult ",
+    fr: "Le nom et l'identifiants du voyageur ne correspondent pas, veuillez consulter ",
+    es: "El nombre y la identificación del viajero no coinciden, consulte ",
+    de: "Name und ID des Reisenden stimmen nicht überein. Bitte konsultieren Sie ",
+    pt: "O nome e a identificação do viajante não coincidem, consulte ",
+    th: "ชื่อผู้เดินทางและ ID ไม่ตรงกัน โปรดปรึกษา ",
+    hi: "यात्री का नाम और आईडी मेल नहीं खाते हैं, कृपया परामर्श लें ",
+    ja: "トラベラー名とIDが一致しません。以下をご参照ください： ",
+    zh: "旅人姓名与ID不匹配，请咨询 ",
+    it: "Il nome e l'identificativo del viaggiatore non corrispondono, si prega di consultare "
+  },
+  " Your Authorization level does not provide access. If you have questions contact ": {
+    en: " Your Authorization level does not provide access. If you have questions contact ",
+    fr: " Votre niveau d'autorisation ne permet pas l'accès. Si vous avez des questions, contactez ",
+    es: " Su nivel de autorización no proporciona acceso. Si tiene preguntas, comuníquese con ",
+    de: " Ihre Berechtigungsstufe gewährt keinen Zugriff. Bei Fragen wenden Sie sich an ",
+    pt: " O seu nível de autorização não concede acesso. Se tiver dúvidas, contacte ",
+    th: " ระดับการอนุญาตของคุณไม่สามารถเข้าถึงได้ หากมีคำถามโปรดติดต่อ ",
+    hi: " आपका प्राधिकरण स्तर पहुंच प्रदान नहीं करता है। यदि आपके कोई प्रश्न हैं तो संपर्क करें ",
+    ja: " 権限レベルがアクセスを許可していません。ご質問がある場合は以下にお問い合わせください： ",
+    zh: " 您的授权级别不支持访问。如有问题，请联系 ",
+    it: " Il tuo livello di autorizzazione non consente l'accesso. In caso di domande, contatta "
   },
   "STATUS:": {
     en: "STATUS:",
@@ -359,7 +423,8 @@ const TRANSLATIONS: TranslationDict = {
     th: "รายงานที่กำหนดเอง",
     hi: "कस्टम रिपोर्ट",
     ja: "カスタムレポート",
-    zh: "自定义报告"
+    zh: "自定义报告",
+    it: "Rapporto Personalizzato"
   },
   "Custom Report Column Toggle": {
     en: "Custom Report Column Toggle",
@@ -370,7 +435,20 @@ const TRANSLATIONS: TranslationDict = {
     th: "สลับคอลัมน์รายงานที่กำหนดเอง",
     hi: "कस्टम रिपोर्ट कॉलम टॉगल",
     ja: "カスタムレポート列の切り替え",
-    zh: "自定义报告列切换"
+    zh: "自定义报告列切换",
+    it: "Attivazione Colonne Rapporto Personalizzato"
+  },
+  "The name is always included.": {
+    en: "The name is always included.",
+    fr: "Le nom est toujours inclus.",
+    es: "El nombre siempre está incluido.",
+    de: "Der Name ist immer enthalten.",
+    pt: "O nome está sempre incluído.",
+    th: "รวมชื่อเสมอ",
+    hi: "नाम हमेशा शामिल होता है।",
+    ja: "名は常に含まれます。",
+    zh: "名称总是包含在内。",
+    it: "Il nome è sempre incluso."
   },
   "Criteria 1": {
     en: "Criteria 1",
@@ -689,7 +767,8 @@ const TRANSLATIONS: TranslationDict = {
     th: "เลือกภาษา",
     hi: "भाषा चुनें",
     ja: "言語を選択",
-    zh: "选择语言"
+    zh: "选择语言",
+    it: "Seleziona Lingua"
   },
   "Show All": {
     en: "Show All",
@@ -941,6 +1020,11 @@ export default function App() {
     return saved;
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [travellerName, setTravellerName] = useState('');
+  const [travellerId, setTravellerId] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationError, setVerificationError] = useState<ReactNode | null>(null);
   const [textScale, setTextScale] = useState<string>(() => {
     return localStorage.getItem('agt_text_scale') || '1';
   });
@@ -1009,7 +1093,7 @@ export default function App() {
     }
   };
 
-  const [language, setLanguage] = useState<'en' | 'fr' | 'es' | 'de' | 'pt' | 'th' | 'zh' | 'hi' | 'ja'>(() => {
+  const [language, setLanguage] = useState<'en' | 'fr' | 'es' | 'de' | 'pt' | 'th' | 'zh' | 'hi' | 'ja' | 'it'>(() => {
     let saved = localStorage.getItem('agt_language') as any;
     if (saved === 'ru') saved = 'th';
     return saved || 'en';
@@ -1019,12 +1103,13 @@ export default function App() {
     const normalizedKey = key.trim();
     const entry = TRANSLATIONS[normalizedKey];
     if (entry && entry[language]) {
-      return entry[language];
+      return entry[language]!;
     }
     // Try case-insensitive lookup
     for (const k of Object.keys(TRANSLATIONS)) {
       if (k.toLowerCase() === normalizedKey.toLowerCase()) {
-        return TRANSLATIONS[k][language];
+        const val = TRANSLATIONS[k][language];
+        if (val) return val;
       }
     }
     return key;
@@ -1656,7 +1741,7 @@ export default function App() {
     doc.save(`AGT_Multitool_Report_${timestamp}.pdf`);
   };
 
-  const downloadFullReportCsv = () => {
+  const triggerCsvDownloadProcessed = () => {
     if (matchedRecords.length === 0) return;
 
     const enabledCols = columns.filter(col => col.enabled);
@@ -1694,6 +1779,145 @@ export default function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const decodeXOR = (encodedText: string): string => {
+    const key = 969; 
+    let decoded = ""; 
+    for (let i = 0; i < encodedText.length; i++) { 
+      let charCode = encodedText.charCodeAt(i); 
+      let originalCharCode = charCode ^ key; 
+      decoded += String.fromCharCode(originalCharCode); 
+    } 
+    return decoded; 
+  };
+
+  const verifyAndDownloadCsv = async () => {
+    setIsVerifying(true);
+    setVerificationError(null);
+
+    const nameTrimmed = travellerName.trim();
+    const idTrimmed = travellerId.trim();
+
+    if (!nameTrimmed) {
+      setVerificationError(t("Please enter your Traveller Name."));
+      setIsVerifying(false);
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9\s-_]{1,42}$/.test(nameTrimmed)) {
+      setVerificationError("Traveller Name must be alphanumeric and up to 42 characters.");
+      setIsVerifying(false);
+      return;
+    }
+
+    const idRegex = /^\d{8}-[0-9A-Z]{4}-\d{4}$/;
+    if (!idRegex.test(idTrimmed)) {
+      setVerificationError("Traveller ID format must be ########-????-#### (e.g. 37411005-HN4T-7407).");
+      setIsVerifying(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("https://docs.google.com/spreadsheets/d/e/2PACX-1vSOZq3Cl2e0aNqzXdLRe63HuM7PlqGH3HnS_-0x6P_CYnGDJlK5QvI-YjU0lNaOgLyp3uoktS4WIXyK/pub?gid=505079663&single=true&output=tsv");
+      if (!response.ok) {
+        throw new Error("Failed to fetch database");
+      }
+      const tsvText = await response.text();
+      const rows = tsvText.split(/\r?\n/).map(row => row.split("\t"));
+
+      let foundMatchingRow: string[] | null = null;
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row && row.length >= 2) {
+          const colAVal = row[0] || '';
+          if (colAVal.trim().toLowerCase() === nameTrimmed.toLowerCase()) {
+            foundMatchingRow = row;
+            break;
+          }
+        }
+      }
+
+      if (!foundMatchingRow) {
+        setVerificationError(
+          <span>
+            {t("Traveller Name and ID and does not match, Please consult ")}
+            <a 
+              href="https://www.nms-agt.com/support/traveller-id" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-[#FF0500] hover:underline hover:text-[#FFB451] font-bold"
+            >
+              AGT Support
+            </a>
+          </span>
+        );
+        setIsVerifying(false);
+        return;
+      }
+
+      const colBVal = foundMatchingRow[1] || '';
+      const decodedB = decodeXOR(colBVal);
+
+      const matchedA = (foundMatchingRow[0]?.trim().toLowerCase() === nameTrimmed.toLowerCase());
+      const matchedB = (decodedB.trim().toLowerCase() === idTrimmed.toLowerCase());
+
+      if (!matchedA || !matchedB) {
+        setVerificationError(
+          <span>
+            {t("Traveller Name and ID and does not match, Please consult ")}
+            <a 
+              href="https://www.nms-agt.com/support/traveller-id" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-[#FF0500] hover:underline hover:text-[#FFB451] font-bold"
+            >
+              AGT Support
+            </a>
+          </span>
+        );
+        setIsVerifying(false);
+        return;
+      }
+
+      const colCVal = foundMatchingRow[2] || '';
+      const levelNum = parseFloat(colCVal);
+
+      if (isNaN(levelNum) || levelNum <= 0) {
+        setVerificationError(
+          <span>
+            {t(" Your Authorization level does not provide access. If you have questions contact ")}
+            <a 
+              href="https://www.nms-agt.com/support/traveller-id" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-[#FF0500] hover:underline hover:text-[#FFB451] font-bold"
+            >
+              AGT Support
+            </a>
+          </span>
+        );
+        setIsVerifying(false);
+        return;
+      }
+
+      setShowVerificationModal(false);
+      triggerCsvDownloadProcessed();
+    } catch (err) {
+      console.error(err);
+      setVerificationError("Network error. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const downloadFullReportCsv = () => {
+    if (matchedRecords.length === 0) return;
+    setTravellerName('');
+    setTravellerId('');
+    setVerificationError(null);
+    setIsVerifying(false);
+    setShowVerificationModal(true);
   };
 
   const toggleColumn = (name: string) => {
@@ -2544,6 +2768,7 @@ export default function App() {
                             <option value="hi" className="bg-[#161616] text-[#FFB451]">हिन्दी (HI)</option>
                             <option value="ja" className="bg-[#161616] text-[#FFB451]">日本語 (JA)</option>
                             <option value="zh" className="bg-[#161616] text-[#FFB451]">中文 (ZH)</option>
+                            <option value="it" className="bg-[#161616] text-[#FFB451]">Italiano (IT)</option>
                           </select>
                         </div>
                       </div>
@@ -2557,16 +2782,16 @@ export default function App() {
                           {t("Custom Report Column Toggle")}
                         </h3>
                         <p className="text-[10.5px] text-[#FFB451]/60 font-mono text-left">
-                          Choose which columns are present in the "Custom" report. Column A is always included first in each row.
+                          Choose which columns are present in the "Custom" report. {t("The name is always included.")}
                         </p>
                         
                         {/* Grid of toggle buttons for B to AJ */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                           {DETAILED_COL_INDICES.slice(1).map(idx => {
                             const letter = getColumnLetter(idx);
                             const headerIndex = findHeaderRowIndex(allRawRows);
                             const headerName = allRawRows[headerIndex]?.[idx] || '';
-                            const labelName = headerName ? `[${letter}] ${headerName}` : `[${letter}] Column ${letter}`;
+                            const buttonText = headerName ? t(headerName) : `Column ${letter}`;
                             const isEnabled = customToggles[idx] !== false;
                             
                             return (
@@ -2579,13 +2804,14 @@ export default function App() {
                                     [idx]: !isEnabled
                                   }));
                                 }}
-                                className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all text-[9.5px] font-mono cursor-pointer ${
+                                className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all text-[10.5px] font-mono cursor-pointer ${
                                   isEnabled
                                     ? 'border-[#FF0500] bg-[#FF0500]/10 text-white shadow-[0_0_8px_rgba(255,5,0,0.15)] font-bold'
                                     : 'border-[#FFB451]/20 bg-black/40 text-[#FFB451]/45 hover:border-[#FFB451]/45'
                                 }`}
+                                title={buttonText}
                               >
-                                <span className="truncate pr-1" title={labelName}>{labelName}</span>
+                                <span className="truncate pr-1">{buttonText}</span>
                                 <span className="shrink-0 text-[8px] px-1 py-0.2 rounded font-black uppercase tracking-wider bg-black/50">
                                   {isEnabled ? 'ON' : 'OFF'}
                                 </span>
@@ -2634,6 +2860,95 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Verification Overlay - Pop Up Box on top of the main display */}
+          <AnimatePresence>
+            {showVerificationModal && (
+              <div 
+                className="fixed inset-0 bg-black/85 backdrop-blur-md z-[160] flex items-center justify-center p-4 pointer-events-auto"
+                onClick={() => setShowVerificationModal(false)}
+              >
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0, y: 15 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 15 }}
+                  transition={{ type: "spring", duration: 0.5 }}
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-md w-full p-6 shadow-2xl overflow-y-auto max-h-[90vh]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-5">
+                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
+                      <ShieldAlert className="w-5 h-5 text-[#FF0500]" />
+                      {t("Verify Traveller ID")}
+                    </h3>
+                    <button 
+                      onClick={() => setShowVerificationModal(false)}
+                      className="px-4 py-2 bg-transparent text-[#FFB451]/60 hover:text-[#FFB451] rounded-lg text-[10px] uppercase tracking-widest font-bold transition-all cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[10px] uppercase tracking-widest text-[#FFB451] block font-bold font-mono">
+                        {t("Traveller Name")}
+                      </label>
+                      <input 
+                        type="text"
+                        maxLength={42}
+                        value={travellerName}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^a-zA-Z0-9\s-_]/g, '');
+                          setTravellerName(val);
+                        }}
+                        placeholder="e.g. Lorde Caelum"
+                        className="w-full bg-black/50 border border-[#FFB451]/20 rounded-lg p-3 text-white text-xs font-mono focus:border-[#FF0500] outline-none transition-all placeholder:text-[#FFB451]/30"
+                      />
+                      <span className="text-[9px] text-[#FFB451]/40 block font-mono">Max 42 characters, alphanumeric.</span>
+                    </div>
+
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[10px] uppercase tracking-widest text-[#FFB451] block font-bold font-mono">
+                        {t("AGT Traveller ID")}
+                      </label>
+                      <input 
+                        type="text"
+                        value={travellerId}
+                        onChange={(e) => {
+                          setTravellerId(e.target.value.toUpperCase());
+                        }}
+                        placeholder="37411005-HN4T-7407"
+                        className="w-full bg-black/50 border border-[#FFB451]/20 rounded-lg p-3 text-white text-xs font-mono focus:border-[#FF0500] outline-none transition-all placeholder:text-[#FFB451]/30"
+                      />
+                      <span className="text-[9px] text-[#FFB451]/40 block font-mono">Format: ########-????-####</span>
+                    </div>
+
+                    {verificationError && (
+                      <div className="p-3.5 bg-[#FF0500]/10 border border-[#FF0500]/30 rounded-xl text-[11.5px] text-[#FFB451] text-left leading-relaxed font-mono">
+                        {verificationError}
+                      </div>
+                    )}
+
+                    <button 
+                      onClick={verifyAndDownloadCsv}
+                      disabled={isVerifying}
+                      className="w-full py-3.5 mt-2 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-xl text-xs uppercase tracking-widest font-black hover:bg-[#FF0500]/85 transition-all text-center flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)] disabled:opacity-40"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <span>Verify & Download CSV</span>
+                      )}
+                    </button>
                   </div>
                 </motion.div>
               </div>
