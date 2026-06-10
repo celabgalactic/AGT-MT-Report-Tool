@@ -1009,7 +1009,55 @@ interface ColumnConfig {
   enabled: boolean;
 }
 
+const setCookie = (name: string, value: string, days?: number) => {
+  let expires = "";
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = "; expires=" + date.toUTCString();
+  }
+  document.cookie = name + "=" + (encodeURIComponent(value) || "") + expires + "; path=/; SameSite=Lax; Secure";
+};
+
+const getCookie = (name: string): string | null => {
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+  }
+  return null;
+};
+
+const eraseCookie = (name: string) => {
+  document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax; Secure';
+};
+
+const getSecurityLevel = (classification: string | undefined): number => {
+  if (!classification) return 0;
+  const clean = String(classification).trim().toLowerCase();
+  if (clean === 'private') return 1;
+  if (clean === 'restricted') return 2;
+  if (clean === 'top secret') return 3;
+  if (clean === 'slt restricted') return 4;
+  if (clean === 'scc restricted') return 5;
+  return 0; // default is Public
+};
+
 export default function App() {
+  const [savedTravellerName, setSavedTravellerName] = useState<string>(() => getCookie('agt_traveller_name') || '');
+  const [savedTravellerId, setSavedTravellerId] = useState<string>(() => getCookie('agt_traveller_id') || '');
+  const [savedSecurityLevel, setSavedSecurityLevel] = useState<number>(() => {
+    const l = getCookie('agt_security_level');
+    return l ? parseFloat(l) : 0;
+  });
+
+  const [settingsTravellerName, setSettingsTravellerName] = useState('');
+  const [settingsTravellerId, setSettingsTravellerId] = useState('');
+  const [isSettingsVerifying, setIsSettingsVerifying] = useState(false);
+  const [popupMessage, setPopupMessage] = useState<string | null>(null);
+
   const [sheetUrl, setSheetUrl] = useState<string>(() => {
     const saved = localStorage.getItem('sheet_reporter_url');
     const oldDefault = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSWiJE26JMTHgjGeZfpfTrwT1HL2ZnXIqiOVkNs-V8wtDkGE7ey0Q9hnAM-bpMhy475q45qHa09o2vC/pub?gid=0&single=true&output=csv';
@@ -1021,6 +1069,7 @@ export default function App() {
   });
   const [showSettings, setShowSettings] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [exportType, setExportType] = useState<'csv' | 'pdf'>('csv');
   const [travellerName, setTravellerName] = useState('');
   const [travellerId, setTravellerId] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -1034,6 +1083,13 @@ export default function App() {
   });
   
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (showSettings) {
+      setSettingsTravellerName(savedTravellerName);
+      setSettingsTravellerId(savedTravellerId);
+    }
+  }, [showSettings, savedTravellerName, savedTravellerId]);
 
   // Initial fetch and manual font loading
   useEffect(() => {
@@ -1517,7 +1573,11 @@ export default function App() {
       const classMatch = termClass === 'all' || !termClass || rowClass === termClass;
       const discMatch = termDisc === 'all' || !termDisc || rowDisc.includes(termDisc);
 
-      return civMatch && galMatch && regMatch && sysMatch && typeMatch && classMatch && discMatch;
+      const rowSecurity = getSecurityLevel(row["AK"]);
+      const maxAllowedSecurity = savedSecurityLevel || 0;
+      const securityMatch = rowSecurity <= maxAllowedSecurity;
+
+      return civMatch && galMatch && regMatch && sysMatch && typeMatch && classMatch && discMatch && securityMatch;
     });
 
     // Sort by Galaxy then by Multi-tool Name
@@ -1554,9 +1614,9 @@ export default function App() {
         filterDiscoverer
       );
     }
-  }, [filterCivilization, filterGalaxy, filterRegion, filterSystem, filterType, filterClass, filterDiscoverer, data]);
+  }, [filterCivilization, filterGalaxy, filterRegion, filterSystem, filterType, filterClass, filterDiscoverer, data, savedSecurityLevel]);
 
-  const downloadFullReportPdf = async () => {
+  const triggerPdfDownloadProcessed = async () => {
     if (matchedRecords.length === 0) return;
 
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape layout (297mm x 210mm)
@@ -1675,13 +1735,21 @@ export default function App() {
 
     const enabledCols = columns.filter(col => col.enabled);
     const tableHeaders = enabledCols.map(col => t(col.name));
-    const tableData = matchedRecords.map(record => 
+    
+    // Filter records with higher security level than matching user's security level
+    const filteredRecords = matchedRecords.filter(record => {
+      const rowSecurity = getSecurityLevel(record["AK"]);
+      const maxAllowedSecurity = savedSecurityLevel || 0;
+      return rowSecurity <= maxAllowedSecurity;
+    });
+
+    const tableData = filteredRecords.map(record => 
       enabledCols.map(col => record[col.name] || '-')
     );
 
     // PDF Table total row
     const totalRow = enabledCols.map(col => {
-      if (col.name === enabledCols[0].name) return `${t("Number of Multi-tools")}: ${totalPoints}`;
+      if (col.name === enabledCols[0].name) return `${t("Number of Multi-tools")}: ${filteredRecords.length}`;
       return '';
     });
     tableData.push(totalRow);
@@ -1746,12 +1814,20 @@ export default function App() {
 
     const enabledCols = columns.filter(col => col.enabled);
     const displayHeaders = enabledCols.map(col => col.name);
-    const rows = matchedRecords.map(record =>
+    
+    // Filter records with higher security level than matching user's security level
+    const filteredRecords = matchedRecords.filter(record => {
+      const rowSecurity = getSecurityLevel(record["AK"]);
+      const maxAllowedSecurity = savedSecurityLevel || 0;
+      return rowSecurity <= maxAllowedSecurity;
+    });
+
+    const rows = filteredRecords.map(record =>
       enabledCols.map(col => record[col.name] || '')
     );
 
     const totalRow = enabledCols.map(col => {
-      if (col.name === enabledCols[0].name) return `${t("Number of Multi-tools")}: ${totalPoints}`;
+      if (col.name === enabledCols[0].name) return `${t("Number of Multi-tools")}: ${filteredRecords.length}`;
       return '';
     });
     rows.push(totalRow);
@@ -1901,8 +1977,30 @@ export default function App() {
         return;
       }
 
+      // Save to cookie and verify
+      setCookie('agt_traveller_name', nameTrimmed, 365);
+      setCookie('agt_traveller_id', idTrimmed, 365);
+      setCookie('agt_security_level', String(levelNum), 365);
+
+      const checkName = getCookie('agt_traveller_name');
+      const checkId = getCookie('agt_traveller_id');
+      const checkLevel = getCookie('agt_security_level');
+
+      if (checkName === nameTrimmed && checkId === idTrimmed && checkLevel === String(levelNum)) {
+        setPopupMessage("Verification successful, setting saved");
+        setSavedTravellerName(nameTrimmed);
+        setSavedTravellerId(idTrimmed);
+        setSavedSecurityLevel(levelNum);
+      } else {
+        setPopupMessage("Verification successful, setting save error");
+      }
+
       setShowVerificationModal(false);
-      triggerCsvDownloadProcessed();
+      if (exportType === 'pdf') {
+        triggerPdfDownloadProcessed();
+      } else {
+        triggerCsvDownloadProcessed();
+      }
     } catch (err) {
       console.error(err);
       setVerificationError("Network error. Please try again.");
@@ -1913,11 +2011,160 @@ export default function App() {
 
   const downloadFullReportCsv = () => {
     if (matchedRecords.length === 0) return;
-    setTravellerName('');
-    setTravellerId('');
-    setVerificationError(null);
-    setIsVerifying(false);
-    setShowVerificationModal(true);
+
+    const cookieName = getCookie('agt_traveller_name');
+    const cookieId = getCookie('agt_traveller_id');
+    const cookieLevelStr = getCookie('agt_security_level');
+
+    if (cookieName && cookieId && cookieLevelStr) {
+      // Skip the prompt modal entirely!
+      triggerCsvDownloadProcessed();
+    } else {
+      setExportType('csv');
+      setTravellerName('');
+      setTravellerId('');
+      setVerificationError(null);
+      setIsVerifying(false);
+      setShowVerificationModal(true);
+    }
+  };
+
+  const downloadFullReportPdf = () => {
+    if (matchedRecords.length === 0) return;
+
+    const cookieName = getCookie('agt_traveller_name');
+    const cookieId = getCookie('agt_traveller_id');
+    const cookieLevelStr = getCookie('agt_security_level');
+
+    if (cookieName && cookieId && cookieLevelStr) {
+      // Skip the prompt modal entirely!
+      triggerPdfDownloadProcessed();
+    } else {
+      setExportType('pdf');
+      setTravellerName('');
+      setTravellerId('');
+      setVerificationError(null);
+      setIsVerifying(false);
+      setShowVerificationModal(true);
+    }
+  };
+
+  const handleSaveSettingsCredentials = async () => {
+    setIsSettingsVerifying(true);
+
+    const nameTrimmed = settingsTravellerName.trim();
+    const idTrimmed = settingsTravellerId.trim();
+
+    if (!nameTrimmed || !idTrimmed) {
+      setPopupMessage("Verification unsuccessful");
+      setIsSettingsVerifying(false);
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9\s-_]{1,42}$/.test(nameTrimmed)) {
+      setPopupMessage("Verification unsuccessful");
+      setIsSettingsVerifying(false);
+      return;
+    }
+
+    const idRegex = /^\d{8}-[0-9A-Z]{4}-\d{4}$/;
+    if (!idRegex.test(idTrimmed)) {
+      setPopupMessage("Verification unsuccessful");
+      setIsSettingsVerifying(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("https://docs.google.com/spreadsheets/d/e/2PACX-1vSOZq3Cl2e0aNqzXdLRe63HuM7PlqGH3HnS_-0x6P_CYnGDJlK5QvI-YjU0lNaOgLyp3uoktS4WIXyK/pub?gid=505079663&single=true&output=tsv");
+      if (!response.ok) {
+        throw new Error("Failed to fetch database");
+      }
+      const tsvText = await response.text();
+      const rows = tsvText.split(/\r?\n/).map(row => row.split("\t"));
+
+      let foundMatchingRow: string[] | null = null;
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row && row.length >= 2) {
+          const colAVal = row[0] || '';
+          if (colAVal.trim().toLowerCase() === nameTrimmed.toLowerCase()) {
+            foundMatchingRow = row;
+            break;
+          }
+        }
+      }
+
+      if (!foundMatchingRow) {
+        setPopupMessage("Verification unsuccessful");
+        setIsSettingsVerifying(false);
+        return;
+      }
+
+      const colBVal = foundMatchingRow[1] || '';
+      const decodedB = decodeXOR(colBVal);
+
+      const matchedA = (foundMatchingRow[0]?.trim().toLowerCase() === nameTrimmed.toLowerCase());
+      const matchedB = (decodedB.trim().toLowerCase() === idTrimmed.toLowerCase());
+
+      if (!matchedA || !matchedB) {
+        setPopupMessage("Verification unsuccessful");
+        setIsSettingsVerifying(false);
+        return;
+      }
+
+      const colCVal = foundMatchingRow[2] || '';
+      const levelNum = parseFloat(colCVal);
+
+      if (isNaN(levelNum) || levelNum <= 0) {
+        setPopupMessage(" Your Authorization level does not provide access. If you have questions contact AGT Support (https://www.nms-agt.com/support/traveller-id)");
+        setIsSettingsVerifying(false);
+        return;
+      }
+
+      // Save to cookie and verify
+      setCookie('agt_traveller_name', nameTrimmed, 365);
+      setCookie('agt_traveller_id', idTrimmed, 365);
+      setCookie('agt_security_level', String(levelNum), 365);
+
+      const checkName = getCookie('agt_traveller_name');
+      const checkId = getCookie('agt_traveller_id');
+      const checkLevel = getCookie('agt_security_level');
+
+      if (checkName === nameTrimmed && checkId === idTrimmed && checkLevel === String(levelNum)) {
+        setPopupMessage("Verification successful, setting saved");
+        setSavedTravellerName(nameTrimmed);
+        setSavedTravellerId(idTrimmed);
+        setSavedSecurityLevel(levelNum);
+      } else {
+        setPopupMessage("Verification successful, setting save error");
+      }
+    } catch (err) {
+      console.error(err);
+      setPopupMessage("Verification unsuccessful");
+    } finally {
+      setIsSettingsVerifying(false);
+    }
+  };
+
+  const handleClearSettingsCredentials = () => {
+    eraseCookie('agt_traveller_name');
+    eraseCookie('agt_traveller_id');
+    eraseCookie('agt_security_level');
+
+    const checkName = getCookie('agt_traveller_name');
+    const checkId = getCookie('agt_traveller_id');
+    const checkLevel = getCookie('agt_security_level');
+
+    if (!checkName && !checkId && !checkLevel) {
+      setPopupMessage("Clearing successful");
+      setSavedTravellerName('');
+      setSavedTravellerId('');
+      setSavedSecurityLevel(0);
+      setSettingsTravellerName('');
+      setSettingsTravellerId('');
+    } else {
+      setPopupMessage("Clearing failed");
+    }
   };
 
   const toggleColumn = (name: string) => {
@@ -2777,22 +3024,23 @@ export default function App() {
                     {/* Custom Report Column Toggle Subsection */}
                     <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
                       <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
-                        <h3 className="text-[10px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
-                          <Sliders className="w-3 h-3 text-[#FFB451]" />
+                        <h3 className="text-[12px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
+                          <Sliders className="w-3.5 h-3.5 text-[#FFB451]" />
                           {t("Custom Report Column Toggle")}
                         </h3>
-                        <p className="text-[10.5px] text-[#FFB451]/60 font-mono text-left">
+                        <p className="text-[12.5px] text-[#FFB451]/60 font-mono text-left">
                           Choose which columns are present in the "Custom" report. {t("The name is always included.")}
                         </p>
                         
                         {/* Grid of toggle buttons for B to AJ */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                           {DETAILED_COL_INDICES.slice(1).map(idx => {
                             const letter = getColumnLetter(idx);
                             const headerIndex = findHeaderRowIndex(allRawRows);
                             const headerName = allRawRows[headerIndex]?.[idx] || '';
                             const buttonText = headerName ? t(headerName) : `Column ${letter}`;
                             const isEnabled = customToggles[idx] !== false;
+                            const tooltipText = buttonText.replace(/^\[[A-Za-z0-9]+\]\s*/i, '');
                             
                             return (
                               <button
@@ -2804,12 +3052,12 @@ export default function App() {
                                     [idx]: !isEnabled
                                   }));
                                 }}
-                                className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all text-[10.5px] font-mono cursor-pointer ${
+                                className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all text-[12.5px] font-mono cursor-pointer ${
                                   isEnabled
                                     ? 'border-[#FF0500] bg-[#FF0500]/10 text-white shadow-[0_0_8px_rgba(255,5,0,0.15)] font-bold'
                                     : 'border-[#FFB451]/20 bg-black/40 text-[#FFB451]/45 hover:border-[#FFB451]/45'
                                 }`}
-                                title={buttonText}
+                                title={tooltipText}
                               >
                                 <span className="truncate pr-1">{buttonText}</span>
                                 <span className="shrink-0 text-[8px] px-1 py-0.2 rounded font-black uppercase tracking-wider bg-black/50">
@@ -2818,6 +3066,74 @@ export default function App() {
                               </button>
                             );
                           })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Traveller Verification Settings Subsection */}
+                    <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
+                      <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
+                        <h3 className="text-[12px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
+                          <ShieldAlert className="w-3.5 h-3.5 text-[#FFB451]" />
+                          {t("Traveller Verification")}
+                        </h3>
+                        <p className="text-[12.5px] text-[#FFB451]/60 font-mono text-left">
+                          {t("Enter your AGT Traveller Credentials to access restricted security records.")}
+                        </p>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-[#FFB451]/75 uppercase tracking-widest font-bold font-mono block">
+                              {t("Traveller Name")}
+                            </label>
+                            <input
+                              type="text"
+                              maxLength={42}
+                              value={settingsTravellerName}
+                              onChange={(e) => setSettingsTravellerName(e.target.value)}
+                              placeholder="e.g. John Doe"
+                              className="w-full bg-black/50 border-2 border-[#FFB451]/20 rounded-xl text-[12px] font-mono font-bold text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] transition-colors placeholder-[#FFB451]/30"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-[#FFB451]/75 uppercase tracking-widest font-bold font-mono block">
+                              {t("AGT Traveller ID")}
+                            </label>
+                            <input
+                              type="text"
+                              value={settingsTravellerId}
+                              onChange={(e) => setSettingsTravellerId(e.target.value)}
+                              placeholder="e.g. 37411005-HN4T-7407"
+                              className="w-full bg-black/50 border-2 border-[#FFB451]/20 rounded-xl text-[12px] font-mono font-bold text-[#FFB451] py-3.5 px-4 focus:outline-none focus:border-[#FF0500] transition-colors placeholder-[#FFB451]/30"
+                            />
+                          </div>
+                        </div>
+
+                        {savedTravellerName && (
+                          <div className="text-[11.5px] font-mono text-green-500 flex items-center gap-2 bg-green-500/5 border border-green-500/20 p-2.5 rounded-lg">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                            Verified: {savedTravellerName} (Level {savedSecurityLevel})
+                          </div>
+                        )}
+
+                        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                          <button
+                            type="button"
+                            onClick={handleSaveSettingsCredentials}
+                            disabled={isSettingsVerifying}
+                            className="flex-1 py-3 bg-[#FF0500] hover:bg-[#FF0500]/85 border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.15)] disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            {isSettingsVerifying ? t("Verifying...") : t("Verify & Save Credentials")}
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={handleClearSettingsCredentials}
+                            className="py-3 px-8 bg-[#161616] border-2 border-[#FF0500]/40 text-[#FFB451] hover:text-white hover:border-[#FF0500] rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/15 transition-all cursor-pointer"
+                          >
+                            {t("Clear Credentials")}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2946,7 +3262,7 @@ export default function App() {
                           <span>Verifying...</span>
                         </>
                       ) : (
-                        <span>Verify & Download CSV</span>
+                        <span>{exportType === 'pdf' ? t("Verify & Download PDF") : t("Verify & Download CSV")}</span>
                       )}
                     </button>
                   </div>
@@ -3237,6 +3553,45 @@ export default function App() {
             >
               {t("Processing Galactic Archive...")}
             </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Pop Up Message Modal */}
+      <AnimatePresence>
+        {popupMessage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[210] flex items-center justify-center p-4 pointer-events-auto"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl space-y-5"
+            >
+              <div className="mx-auto w-12 h-12 rounded-full bg-[#FF0500]/10 flex items-center justify-center border border-[#FF0500]/30">
+                <ShieldAlert className="w-6 h-6 text-[#FF0500]" />
+              </div>
+              
+              <div className="space-y-2">
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#FFB451]">
+                  System Notification
+                </h3>
+                <p className="text-sm font-sans font-medium text-white/90">
+                  {popupMessage}
+                </p>
+              </div>
+
+              <button
+                onClick={() => setPopupMessage(null)}
+                className="w-full py-3 bg-[#FF0500] hover:bg-[#FF0500]/85 border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
+              >
+                Acknowledge
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
