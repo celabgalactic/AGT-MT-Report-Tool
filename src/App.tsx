@@ -2223,6 +2223,21 @@ export default function App() {
                 {loading ? t('SYNCING') : sheetUrl ? t('CONNECTED') : t('DISCONNECTED')}
               </span>
             </div>
+            {savedTravellerName && savedTravellerId ? (
+              <div 
+                id="header-traveller-badge"
+                className="border border-green-500 rounded-lg px-2.5 py-1 text-[11px] font-mono font-bold text-green-500 whitespace-nowrap"
+              >
+                {savedTravellerName.slice(0, 20)}
+              </div>
+            ) : (
+              <div 
+                id="header-traveller-badge"
+                className="border border-[#FF0500] rounded-lg px-2.5 py-1 text-[11px] font-mono font-bold text-[#FF0500] whitespace-nowrap"
+              >
+                Public User
+              </div>
+            )}
             <button 
               onClick={() => setShowSettings(!showSettings)}
               className="p-2 hover:bg-[#FF0500]/10 rounded-lg transition-colors relative group cursor-pointer"
