@@ -1233,6 +1233,54 @@ export default function App() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+  // Synchronized Top Horizontal Scrollbar Hooks & Refs
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const bottomScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState<number>(0);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+
+  const handleTopScroll = () => {
+    if (topScrollRef.current && bottomScrollRef.current) {
+      if (bottomScrollRef.current.scrollLeft !== topScrollRef.current.scrollLeft) {
+        bottomScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+      }
+    }
+  };
+
+  const handleBottomScroll = () => {
+    if (topScrollRef.current && bottomScrollRef.current) {
+      if (topScrollRef.current.scrollLeft !== bottomScrollRef.current.scrollLeft) {
+        topScrollRef.current.scrollLeft = bottomScrollRef.current.scrollLeft;
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!bottomScrollRef.current || !tableRef.current) return;
+
+    const bottomEl = bottomScrollRef.current;
+    const tableEl = tableRef.current;
+
+    const updateDimensions = () => {
+      setTableScrollWidth(tableEl.offsetWidth);
+      setContainerWidth(bottomEl.clientWidth);
+    };
+
+    updateDimensions();
+
+    const observer = new ResizeObserver(() => {
+      updateDimensions();
+    });
+
+    observer.observe(bottomEl);
+    observer.observe(tableEl);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [matchedRecords, columns, currentPage]);
+
   // Compute unique dropdown values dynamically based on loaded data
   const civilizationOptions = useMemo(() => {
     const list = Array.from(new Set(data.map(item => item["Civilization"]).filter(Boolean))) as string[];
@@ -3329,8 +3377,24 @@ export default function App() {
                       </div>
                     </div>
  
-                    <div className="overflow-x-auto overflow-y-auto max-h-[620px] custom-scrollbar relative">
-                      <table className="w-full text-left border-collapse">
+                    {/* Coordinated Top Scrollbar - Visible when horizontal scrolling is needed */}
+                    {tableScrollWidth > containerWidth && (
+                      <div 
+                        ref={topScrollRef}
+                        onScroll={handleTopScroll}
+                        className="overflow-x-auto overflow-y-hidden custom-scrollbar bg-black/20 border-b border-[#FF0500]/10"
+                        style={{ width: '100%' }}
+                      >
+                        <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
+                      </div>
+                    )}
+
+                    <div 
+                      ref={bottomScrollRef}
+                      onScroll={handleBottomScroll}
+                      className="overflow-x-auto overflow-y-auto max-h-[620px] custom-scrollbar relative"
+                    >
+                      <table ref={tableRef} className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-[#161616] border-b border-[#FF0500]/25 sticky top-0 z-20 shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                             {columns.filter(col => col.enabled).map((col, idx) => {
