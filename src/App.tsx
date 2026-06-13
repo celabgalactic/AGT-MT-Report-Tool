@@ -1174,6 +1174,8 @@ export default function App() {
   // 7 filter criteria variables
   const [filterCivilization, setFilterCivilization] = useState('All');
   const [filterGalaxy, setFilterGalaxy] = useState('All');
+  const [omitPublicRecords, setOmitPublicRecords] = useState(false);
+  const [omitPrivateRecords, setOmitPrivateRecords] = useState(false);
   const [filterRegion, setFilterRegion] = useState('');
   const [filterSystem, setFilterSystem] = useState('');
   const [filterType, setFilterType] = useState('All');
@@ -1421,6 +1423,64 @@ export default function App() {
     });
   }, [matchedRecords, sortColumn, sortDirection]);
 
+  const omittedCount = useMemo(() => {
+    let termCiv = filterCivilization.trim().toLowerCase();
+    let termGal = filterGalaxy.trim().toLowerCase();
+    let termReg = filterRegion.trim().toLowerCase();
+    let termSys = filterSystem.trim().toLowerCase();
+    let termType = filterType.trim().toLowerCase();
+    let termClass = filterClass.trim().toLowerCase();
+    let termDisc = filterDiscoverer.trim().toLowerCase();
+
+    if (termCiv === 'agt') {
+      termCiv = 'alliance of galactic travellers';
+    }
+
+    const maxAllowedSecurity = savedSecurityLevel || 0;
+
+    return data.filter(row => {
+      const rowCiv = String(row["Civilization"] || '').toLowerCase();
+      const rowGal = String(row["Galaxy"] || '').toLowerCase();
+      const rowReg = String(row["Region"] || '').toLowerCase();
+      const rowSys = String(row["Star System"] || '').toLowerCase();
+      const rowType = String(row["Type"] || '').toLowerCase();
+      const rowClass = String(row["Class"] || '').toLowerCase();
+      const rowDisc = String(row["Discoverer"] || '').toLowerCase();
+
+      // If filter is "All", empty, or a match
+      const civMatch = termCiv === 'all' || !termCiv || rowCiv.includes(termCiv);
+      const galMatch = termGal === 'all' || !termGal || rowGal.includes(termGal);
+      const regMatch = termReg === 'all' || !termReg || rowReg.includes(termReg);
+      const sysMatch = termSys === 'all' || !termSys || rowSys.includes(termSys);
+      const typeMatch = termType === 'all' || !termType || rowType.includes(termType);
+      const classMatch = termClass === 'all' || !termClass || rowClass === termClass;
+      const discMatch = termDisc === 'all' || !termDisc || rowDisc.includes(termDisc);
+
+      const matchesFilters = civMatch && galMatch && regMatch && sysMatch && typeMatch && classMatch && discMatch;
+      if (!matchesFilters) return false;
+
+      const rowSecurity = getSecurityLevel(row["AK"]);
+      
+      // Let's see: what triggers an omission?
+      // Normally, it's rowSecurity > maxAllowedSecurity.
+      // Additionally, if omitPublicRecords is selected, we also omit public records (rowSecurity === 0).
+      // If omitPrivateRecords is selected, we also omit private records (rowSecurity > 0).
+      // But the requirement says: "due to the users security level".
+      // This is exactly: rowSecurity > maxAllowedSecurity
+      return rowSecurity > maxAllowedSecurity;
+    }).length;
+  }, [
+    filterCivilization, 
+    filterGalaxy, 
+    filterRegion, 
+    filterSystem, 
+    filterType, 
+    filterClass, 
+    filterDiscoverer, 
+    data, 
+    savedSecurityLevel
+  ]);
+
   const paginatedRecords = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return sortedAndMatchedRecords.slice(start, start + itemsPerPage);
@@ -1623,7 +1683,16 @@ export default function App() {
 
       const rowSecurity = getSecurityLevel(row["AK"]);
       const maxAllowedSecurity = savedSecurityLevel || 0;
-      const securityMatch = rowSecurity <= maxAllowedSecurity;
+      
+      let securityMatch = rowSecurity <= maxAllowedSecurity;
+      const hasCreds = !!(savedTravellerName && savedTravellerId);
+      
+      if (hasCreds && omitPublicRecords) {
+        securityMatch = rowSecurity > 0 && rowSecurity <= maxAllowedSecurity;
+      }
+      if (hasCreds && omitPrivateRecords) {
+        securityMatch = rowSecurity === 0;
+      }
 
       return civMatch && galMatch && regMatch && sysMatch && typeMatch && classMatch && discMatch && securityMatch;
     });
@@ -1662,10 +1731,54 @@ export default function App() {
         filterDiscoverer
       );
     }
-  }, [filterCivilization, filterGalaxy, filterRegion, filterSystem, filterType, filterClass, filterDiscoverer, data, savedSecurityLevel]);
+  }, [
+    filterCivilization, 
+    filterGalaxy, 
+    filterRegion, 
+    filterSystem, 
+    filterType, 
+    filterClass, 
+    filterDiscoverer, 
+    data, 
+    savedSecurityLevel, 
+    omitPublicRecords, 
+    omitPrivateRecords, 
+    savedTravellerName, 
+    savedTravellerId
+  ]);
 
   const triggerPdfDownloadProcessed = async () => {
     if (matchedRecords.length === 0) return;
+
+    // Filter records with higher security level than matching user's security level (respecting omit public/private selections)
+    const filteredRecords = matchedRecords.filter(record => {
+      const rowSecurity = getSecurityLevel(record["AK"]);
+      const maxAllowedSecurity = savedSecurityLevel || 0;
+      
+      let securityMatch = rowSecurity <= maxAllowedSecurity;
+      const hasCreds = !!(savedTravellerName && savedTravellerId);
+      if (hasCreds && omitPublicRecords) {
+        securityMatch = rowSecurity > 0 && rowSecurity <= maxAllowedSecurity;
+      }
+      if (hasCreds && omitPrivateRecords) {
+        securityMatch = rowSecurity === 0;
+      }
+      return securityMatch;
+    });
+
+    if (filteredRecords.length === 0) return;
+
+    // Find the highest security level contained in the reported records
+    let maxSecurityInReport = 0;
+    let highestSecNameInReport = "";
+
+    filteredRecords.forEach(record => {
+      const rowSecurity = getSecurityLevel(record["AK"]);
+      if (rowSecurity > maxSecurityInReport) {
+        maxSecurityInReport = rowSecurity;
+        highestSecNameInReport = String(record["AK"] || '').trim();
+      }
+    });
 
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape layout (297mm x 210mm)
     const galaxyFilterVal = filterGalaxy || 'All';
@@ -1724,6 +1837,13 @@ export default function App() {
     const iconBase64 = await getBase64Image("/AGTIcon.png");
 
     // COVER PAGE SETUP
+    if (maxSecurityInReport > 0 && highestSecNameInReport) {
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(255, 5, 0); // FF0500 Accent
+      doc.text(`This report contains ${highestSecNameInReport} Intelligence`, 148.5, 28, { align: "center" });
+    }
+
     if (logoBase64) {
       doc.addImage(logoBase64, 'PNG', 130.5, 36, 36, 36);
     } else {
@@ -1783,13 +1903,6 @@ export default function App() {
 
     const enabledCols = columns.filter(col => col.enabled);
     const tableHeaders = enabledCols.map(col => t(col.name));
-    
-    // Filter records with higher security level than matching user's security level
-    const filteredRecords = matchedRecords.filter(record => {
-      const rowSecurity = getSecurityLevel(record["AK"]);
-      const maxAllowedSecurity = savedSecurityLevel || 0;
-      return rowSecurity <= maxAllowedSecurity;
-    });
 
     const tableData = filteredRecords.map(record => 
       enabledCols.map(col => record[col.name] || '-')
@@ -1863,11 +1976,20 @@ export default function App() {
     const enabledCols = columns.filter(col => col.enabled);
     const displayHeaders = enabledCols.map(col => col.name);
     
-    // Filter records with higher security level than matching user's security level
+    // Filter records with higher security level than matching user's security level (respecting omit public/private selections)
     const filteredRecords = matchedRecords.filter(record => {
       const rowSecurity = getSecurityLevel(record["AK"]);
       const maxAllowedSecurity = savedSecurityLevel || 0;
-      return rowSecurity <= maxAllowedSecurity;
+      
+      let securityMatch = rowSecurity <= maxAllowedSecurity;
+      const hasCreds = !!(savedTravellerName && savedTravellerId);
+      if (hasCreds && omitPublicRecords) {
+        securityMatch = rowSecurity > 0 && rowSecurity <= maxAllowedSecurity;
+      }
+      if (hasCreds && omitPrivateRecords) {
+        securityMatch = rowSecurity === 0;
+      }
+      return securityMatch;
     });
 
     const rows = filteredRecords.map(record =>
@@ -2210,6 +2332,8 @@ export default function App() {
       setSavedSecurityLevel(0);
       setSettingsTravellerName('');
       setSettingsTravellerId('');
+      setOmitPublicRecords(false);
+      setOmitPrivateRecords(false);
     } else {
       setPopupMessage("Clearing failed");
     }
@@ -2572,6 +2696,41 @@ export default function App() {
                     )}
                   </AnimatePresence>
                 </div>
+
+                {/* Omit checkboxes */}
+                {savedTravellerName && savedTravellerId && (
+                  <div className="flex flex-wrap items-center gap-4 mt-2 text-xs font-mono text-[#FFB451] text-left">
+                    <label className="inline-flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="checkbox"
+                        checked={omitPublicRecords}
+                        onChange={(e) => {
+                          setOmitPublicRecords(e.target.checked);
+                          if (e.target.checked) {
+                            setOmitPrivateRecords(false);
+                          }
+                        }}
+                        className="accent-[#FF0500] w-3.5 h-3.5 bg-[#2a2a2a] border border-[#FF0500]/45 rounded cursor-pointer transition-all focus:ring-1 focus:ring-[#FF0500]"
+                      />
+                      <span className="select-none group-hover:text-white transition-colors">Omit Public Records</span>
+                    </label>
+
+                    <label className="inline-flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="checkbox"
+                        checked={omitPrivateRecords}
+                        onChange={(e) => {
+                          setOmitPrivateRecords(e.target.checked);
+                          if (e.target.checked) {
+                            setOmitPublicRecords(false);
+                          }
+                        }}
+                        className="accent-[#FF0500] w-3.5 h-3.5 bg-[#2a2a2a] border border-[#FF0500]/45 rounded cursor-pointer transition-all focus:ring-1 focus:ring-[#FF0500]"
+                      />
+                      <span className="select-none group-hover:text-white transition-colors">Omit Private Records</span>
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* Input 3: Region */}
@@ -3346,13 +3505,18 @@ export default function App() {
                     className="rounded-2xl overflow-hidden border-2 border-[#FF0500] shadow-[0_0_30px_rgba(255,5,0,0.15)] bg-black/40"
                   >
                     <div className="p-8 border-b border-[#FF0500]/20 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <h3 className="text-xl font-medium text-[#FFB451] flex items-center gap-3">
                           {t("AGT Galactic Archives Results")}
                           <span className="px-2 py-0.5 rounded-full bg-[#FF0500]/10 text-[10px] text-[#FFB451] border border-[#FF0500]/45 font-mono">
                             {matchedRecords.length} {t("FOUND")}
                           </span>
                         </h3>
+                        <div>
+                          <span className="px-2 py-0.5 rounded-full bg-[#FF0500]/10 text-[10px] text-[#FFB451] border border-[#FF0500]/45 font-mono inline-block">
+                            Classified Records Omitted: {omittedCount}
+                          </span>
+                        </div>
                         <p className="text-[10px] text-[#FFB451] uppercase tracking-[0.2em]">{t("Verified Galactic Ledger Matches")}</p>
                       </div>
  
