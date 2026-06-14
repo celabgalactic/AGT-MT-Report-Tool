@@ -438,6 +438,54 @@ const TRANSLATIONS: TranslationDict = {
     zh: "自定义报告列切换",
     it: "Attivazione Colonne Rapporto Personalizzato"
   },
+  "Custom Report Columns": {
+    en: "Custom Report Columns",
+    fr: "Colonnes du Rapport Personnalisé",
+    es: "Columnas del Informe Personalizado",
+    de: "Benutzerdefinierte Spalten des Berichts",
+    pt: "Colunas do Relatório Personalizado",
+    th: "คอลัมน์รายงานที่กำหนดเอง",
+    hi: "कस्टम रिपोर्ट कॉलम",
+    ja: "カスタムレポート列",
+    zh: "自定义报告列",
+    it: "Colonne Rapporto Personalizzato"
+  },
+  "AGT Traveller Registration": {
+    en: "AGT Traveller Registration",
+    fr: "Inscription du Voyageur AGT",
+    es: "Registro de Viajero de AGT",
+    de: "AGT-Reisenden-Registrierung",
+    pt: "Registro de Viajante AGT",
+    th: "การลงทะเบียนนักเดินทาง AGT",
+    hi: "AGT यात्री पंजीकरण",
+    ja: "AGT旅行者登録",
+    zh: "星际旅行者注册",
+    it: "Registrazione del Viaggiatore AGT"
+  },
+  "Save & Verify": {
+    en: "Save & Verify",
+    fr: "Enregistrer et Vérifier",
+    es: "Guardar y Verificar",
+    de: "Speichern & Verifizieren",
+    pt: "Salvar e Verificar",
+    th: "บันทึกและตรวจสอบ",
+    hi: "सहेजें और सत्यापित करें",
+    ja: "保存して確認",
+    zh: "保存并验证",
+    it: "Salva e Verifica"
+  },
+  "Reset": {
+    en: "Reset",
+    fr: "Réinitialiser",
+    es: "Restablecer",
+    de: "Zurücksetzen",
+    pt: "Redefinir",
+    th: "รีเซ็ต",
+    hi: "रीसेट",
+    ja: "リセット",
+    zh: "重置",
+    it: "Ripristina"
+  },
   "The name is always included.": {
     en: "The name is always included.",
     fr: "Le nom est toujours inclus.",
@@ -781,6 +829,28 @@ const TRANSLATIONS: TranslationDict = {
     ja: "すべて表示",
     zh: "显示全部"
   },
+  "Select All": {
+    en: "Select All",
+    fr: "Tout Sélectionner",
+    es: "Seleccionar Todo",
+    de: "Alle auswählen",
+    pt: "Selecionar Tudo",
+    th: "เลือกทั้งหมด",
+    hi: "सभी चुनें",
+    ja: "すべて選択",
+    zh: "选择全部"
+  },
+  "Clear All": {
+    en: "Clear All",
+    fr: "Tout Effacer",
+    es: "Limpiar Todo",
+    de: "Alle löschen",
+    pt: "Limpar Tudo",
+    th: "ล้างทั้งหมด",
+    hi: "सभी साफ़ करें",
+    ja: "すべてクリア",
+    zh: "清除全部"
+  },
   "Region Name": {
     en: "Region Name",
     fr: "Nom de la Région",
@@ -1045,7 +1115,34 @@ const getSecurityLevel = (classification: string | undefined): number => {
   return 0; // default is Public
 };
 
+const getSecurityLevelColor = (level: number): string => {
+  switch (level) {
+    case 0: return "rgb(42, 255, 0)";
+    case 1: return "rgb(0, 244, 255)";
+    case 2: return "rgb(241, 152, 226)";
+    case 3: return "rgb(253, 3, 3)";
+    case 4: return "rgb(255, 147, 0)";
+    case 5: return "rgb(50, 135, 240)";
+    default: return "rgb(42, 255, 0)";
+  }
+};
+
+const getClearanceStatusLabel = (level: number): string => {
+  switch (level) {
+    case 0: return "Public Record";
+    case 1: return "Private Record";
+    case 2: return "Restricted Record";
+    case 3: return "Top Secret";
+    case 4: return "SLT Restricted";
+    case 5: return "SCC Restricted";
+    default: return "Public Record";
+  }
+};
+
 export default function App() {
+  const [showExportAuthErrorModal, setShowExportAuthErrorModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [customColumnsExpanded, setCustomColumnsExpanded] = useState(false);
   const [savedTravellerName, setSavedTravellerName] = useState<string>(() => getCookie('agt_traveller_name') || '');
   const [savedTravellerId, setSavedTravellerId] = useState<string>(() => getCookie('agt_traveller_id') || '');
   const [savedSecurityLevel, setSavedSecurityLevel] = useState<number>(() => {
@@ -1920,8 +2017,9 @@ export default function App() {
       head: [tableHeaders],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [42, 42, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      headStyles: { fillColor: [42, 42, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold', overflow: 'linebreak' },
       bodyStyles: { fontSize: 8, textColor: [30, 30, 30] },
+      styles: { overflow: 'linebreak', cellWidth: 'auto' },
       margin: { top: 30, left: 20, right: 20 },
       didDrawPage: (data) => {
         const logoX = 20;
@@ -2186,16 +2284,19 @@ export default function App() {
     const cookieId = getCookie('agt_traveller_id');
     const cookieLevelStr = getCookie('agt_security_level');
 
-    if (cookieName && cookieId && cookieLevelStr) {
-      // Skip the prompt modal entirely!
-      triggerCsvDownloadProcessed();
+    if (cookieName && cookieId && cookieLevelStr && savedTravellerName && savedTravellerId) {
+      setIsExporting(true);
+      setTimeout(() => {
+        try {
+          triggerCsvDownloadProcessed();
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setIsExporting(false);
+        }
+      }, 500);
     } else {
-      setExportType('csv');
-      setTravellerName('');
-      setTravellerId('');
-      setVerificationError(null);
-      setIsVerifying(false);
-      setShowVerificationModal(true);
+      setShowExportAuthErrorModal(true);
     }
   };
 
@@ -2206,16 +2307,19 @@ export default function App() {
     const cookieId = getCookie('agt_traveller_id');
     const cookieLevelStr = getCookie('agt_security_level');
 
-    if (cookieName && cookieId && cookieLevelStr) {
-      // Skip the prompt modal entirely!
-      triggerPdfDownloadProcessed();
+    if (cookieName && cookieId && cookieLevelStr && savedTravellerName && savedTravellerId) {
+      setIsExporting(true);
+      setTimeout(async () => {
+        try {
+          await triggerPdfDownloadProcessed();
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setIsExporting(false);
+        }
+      }, 500);
     } else {
-      setExportType('pdf');
-      setTravellerName('');
-      setTravellerId('');
-      setVerificationError(null);
-      setIsVerifying(false);
-      setShowVerificationModal(true);
+      setShowExportAuthErrorModal(true);
     }
   };
 
@@ -2398,14 +2502,22 @@ export default function App() {
             {savedTravellerName && savedTravellerId ? (
               <div 
                 id="header-traveller-badge"
-                className="border border-green-500 rounded-lg px-2.5 py-1 text-[11px] font-mono font-bold text-green-500 whitespace-nowrap"
+                className="border rounded-lg px-2.5 py-1 text-[11px] font-mono font-bold whitespace-nowrap"
+                style={{
+                  color: getSecurityLevelColor(savedSecurityLevel),
+                  borderColor: getSecurityLevelColor(savedSecurityLevel)
+                }}
               >
                 {savedTravellerName.slice(0, 20)}
               </div>
             ) : (
               <div 
                 id="header-traveller-badge"
-                className="border border-[#FF0500] rounded-lg px-2.5 py-1 text-[11px] font-mono font-bold text-[#FF0500] whitespace-nowrap"
+                className="border rounded-lg px-2.5 py-1 text-[11px] font-mono font-bold whitespace-nowrap"
+                style={{
+                  color: getSecurityLevelColor(0),
+                  borderColor: getSecurityLevelColor(0)
+                }}
               >
                 Public User
               </div>
@@ -3152,7 +3264,7 @@ export default function App() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Close button inside modal header */}
-                  <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-6">
+                  <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-6 font-mono">
                     <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
                       <Settings className="w-5 h-5 text-[#FF0550] animate-spin" style={{ color: '#FF0550' }} />
                       Control Settings
@@ -3243,61 +3355,120 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Custom Report Column Toggle Subsection */}
+                    {/* Custom Report Columns Subsection */}
                     <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
-                      <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
-                        <h3 className="text-[12px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
-                          <Sliders className="w-3.5 h-3.5 text-[#FFB451]" />
-                          {t("Custom Report Column Toggle")}
-                        </h3>
-                        <p className="text-[12.5px] text-[#FFB451]/60 font-mono text-left">
-                          Choose which columns are present in the "Custom" report. {t("The name is always included.")}
-                        </p>
-                        
-                        {/* Grid of toggle buttons for B to AJ */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                          {DETAILED_COL_INDICES.slice(1).map(idx => {
-                            const letter = getColumnLetter(idx);
-                            const headerIndex = findHeaderRowIndex(allRawRows);
-                            const headerName = allRawRows[headerIndex]?.[idx] || '';
-                            const buttonText = headerName ? t(headerName) : `Column ${letter}`;
-                            const isEnabled = customToggles[idx] !== false;
-                            const tooltipText = buttonText.replace(/^\[[A-Za-z0-9]+\]\s*/i, '');
-                            
-                            return (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => {
-                                  setCustomToggles(prev => ({
-                                    ...prev,
-                                    [idx]: !isEnabled
-                                  }));
-                                }}
-                                className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all text-[12.5px] font-mono cursor-pointer ${
-                                  isEnabled
-                                    ? 'border-[#FF0500] bg-[#FF0500]/10 text-white shadow-[0_0_8px_rgba(255,5,0,0.15)] font-bold'
-                                    : 'border-[#FFB451]/20 bg-black/40 text-[#FFB451]/45 hover:border-[#FFB451]/45'
-                                }`}
-                                title={tooltipText}
-                              >
-                                <span className="truncate pr-1">{buttonText}</span>
-                                <span className="shrink-0 text-[8px] px-1 py-0.2 rounded font-black uppercase tracking-wider bg-black/50">
-                                  {isEnabled ? 'ON' : 'OFF'}
-                                </span>
-                              </button>
-                            );
-                          })}
+                      <div className="border-2 border-[#FF0500] rounded-xl bg-black/30 overflow-hidden">
+                        <div className="w-full p-5 flex items-center justify-between gap-3 hover:bg-[#FF0500]/5 transition-colors">
+                          <button
+                            type="button"
+                            onClick={() => setCustomColumnsExpanded(!customColumnsExpanded)}
+                            className="flex items-center gap-2 text-left focus:outline-none cursor-pointer group/fold"
+                          >
+                            <h3 className="text-[12px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2 select-none group-hover/fold:text-white transition-colors">
+                              <Sliders className="w-3.5 h-3.5 text-[#FFB451] group-hover/fold:text-[#FF0500] transition-colors" />
+                              {t("Custom Report Columns")}
+                            </h3>
+                            <ChevronDown 
+                              className={`w-4 h-4 text-[#FFB451] transition-transform duration-300 group-hover/fold:text-white ${
+                                customColumnsExpanded ? 'rotate-180' : ''
+                              }`} 
+                            />
+                          </button>
+                          
+                          {/* Compact select/clear all buttons positioned next to the expand/fold section button */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const updated: Record<number, boolean> = {};
+                                DETAILED_COL_INDICES.slice(1).forEach(idx => {
+                                  updated[idx] = true;
+                                });
+                                setCustomToggles(updated);
+                              }}
+                              className="px-2.5 py-1 bg-[#FF0500]/10 hover:bg-[#FF0500]/25 border border-[#FF0500]/40 hover:border-[#FF0500] text-[#FFB451] hover:text-white text-[10px] uppercase font-mono font-bold tracking-wider rounded transition-all cursor-pointer shadow-[0_0_8px_rgba(255,5,0,0.1)] hover:shadow-[0_0_12px_rgba(255,5,0,0.25)]"
+                            >
+                              {t("Select All")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const updated: Record<number, boolean> = {};
+                                DETAILED_COL_INDICES.slice(1).forEach(idx => {
+                                  updated[idx] = false;
+                                });
+                                setCustomToggles(updated);
+                              }}
+                              className="px-2.5 py-1 bg-black/40 hover:bg-[#FF0500]/15 border border-[#FFB451]/20 hover:border-[#FF0500]/40 text-[#FFB451]/60 hover:text-[#FFB451] text-[10px] uppercase font-mono font-bold tracking-wider rounded transition-all cursor-pointer"
+                            >
+                              {t("Clear All")}
+                            </button>
+                          </div>
                         </div>
+                        
+                        <AnimatePresence initial={false}>
+                          {customColumnsExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.3, ease: "easeInOut" }}
+                              className="border-t border-[#FF0500]/25"
+                            >
+                              <div className="p-5 space-y-4">
+                                <p className="text-[12.5px] text-[#FFB451]/60 font-mono text-left">
+                                  {t("The name is always included.")}
+                                </p>
+                                {/* Grid of toggle buttons for B to AJ */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                  {DETAILED_COL_INDICES.slice(1).map(idx => {
+                                    const letter = getColumnLetter(idx);
+                                    const headerIndex = findHeaderRowIndex(allRawRows);
+                                    const headerName = allRawRows[headerIndex]?.[idx] || '';
+                                    const buttonText = headerName ? t(headerName) : `Column ${letter}`;
+                                    const isEnabled = customToggles[idx] !== false;
+                                    const tooltipText = buttonText.replace(/^\[[A-Za-z0-9]+\]\s*/i, '');
+                                    
+                                    return (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => {
+                                          setCustomToggles(prev => ({
+                                            ...prev,
+                                            [idx]: !isEnabled
+                                          }));
+                                        }}
+                                        className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all text-[12.5px] font-mono cursor-pointer ${
+                                          isEnabled
+                                            ? 'border-[#FF0500] bg-[#FF0500]/10 text-white shadow-[0_0_8px_rgba(255,5,0,0.15)] font-bold'
+                                            : 'border-[#FFB451]/20 bg-black/40 text-[#FFB451]/45 hover:border-[#FFB451]/45'
+                                        }`}
+                                        title={tooltipText}
+                                      >
+                                        <span className="truncate pr-1">{buttonText}</span>
+                                        <span className="shrink-0 text-[8px] px-1 py-0.2 rounded font-black uppercase tracking-wider bg-black/50">
+                                          {isEnabled ? 'ON' : 'OFF'}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
 
-                    {/* Traveller Verification Settings Subsection */}
+                    {/* AGT Traveller Registration Settings Subsection */}
                     <div className="col-span-1 md:col-span-2 pt-6 border-t border-white/5 space-y-4">
                       <div className="space-y-4 border-2 border-[#FF0500] p-5 rounded-xl bg-black/30">
                         <h3 className="text-[12px] uppercase tracking-widest font-bold text-[#FFB451] flex items-center gap-2">
                           <ShieldAlert className="w-3.5 h-3.5 text-[#FFB451]" />
-                          {t("Traveller Verification")}
+                          {t("AGT Traveller Registration")}
                         </h3>
                         <p className="text-[12.5px] text-[#FFB451]/60 font-mono text-left">
                           {t("Enter your AGT Traveller Credentials to access restricted security records.")}
@@ -3332,13 +3503,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {savedTravellerName && (
-                          <div className="text-[11.5px] font-mono text-green-500 flex items-center gap-2 bg-green-500/5 border border-green-500/20 p-2.5 rounded-lg">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                            Verified: {savedTravellerName} (Level {savedSecurityLevel})
-                          </div>
-                        )}
-
                         <div className="flex flex-col sm:flex-row gap-3 pt-2">
                           <button
                             type="button"
@@ -3346,7 +3510,7 @@ export default function App() {
                             disabled={isSettingsVerifying}
                             className="flex-1 py-3 bg-[#FF0500] hover:bg-[#FF0500]/85 border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.15)] disabled:opacity-50 flex items-center justify-center gap-2"
                           >
-                            {isSettingsVerifying ? t("Verifying...") : t("Verify & Save Credentials")}
+                            {isSettingsVerifying ? t("Verifying...") : t("Save & Verify")}
                           </button>
                           
                           <button
@@ -3354,9 +3518,25 @@ export default function App() {
                             onClick={handleClearSettingsCredentials}
                             className="py-3 px-8 bg-[#161616] border-2 border-[#FF0500]/40 text-[#FFB451] hover:text-white hover:border-[#FF0500] rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/15 transition-all cursor-pointer"
                           >
-                            {t("Clear Credentials")}
+                            {t("Reset")}
                           </button>
                         </div>
+
+                        {savedTravellerName && savedTravellerId && (
+                          <div 
+                            className="text-[11.5px] font-mono flex items-center gap-2 p-2.5 rounded-lg border bg-black/40 animate-fade-in"
+                            style={{
+                              borderColor: getSecurityLevelColor(savedSecurityLevel),
+                              color: getSecurityLevelColor(savedSecurityLevel)
+                            }}
+                          >
+                            <span 
+                              className="w-1.5 h-1.5 rounded-full animate-pulse" 
+                              style={{ backgroundColor: getSecurityLevelColor(savedSecurityLevel) }}
+                            />
+                            <span>{getClearanceStatusLabel(savedSecurityLevel)}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -3493,6 +3673,54 @@ export default function App() {
             )}
           </AnimatePresence>
 
+          {/* Export Auth Error Modal */}
+          <AnimatePresence>
+            {showExportAuthErrorModal && (
+              <div 
+                className="fixed inset-0 bg-black/85 backdrop-blur-md z-[170] flex items-center justify-center p-4 pointer-events-auto"
+                onClick={() => setShowExportAuthErrorModal(false)}
+              >
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0, y: 15 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 15 }}
+                  transition={{ type: "spring", duration: 0.5 }}
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-md w-full p-6 shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-5">
+                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FF0500] flex items-center gap-2">
+                      <ShieldAlert className="w-5 h-5 text-[#FF0500]" />
+                      {t("Security Verification Error")}
+                    </h3>
+                    <button 
+                      onClick={() => setShowExportAuthErrorModal(false)}
+                      className="px-4 py-2 bg-transparent text-[#FFB451]/60 hover:text-[#FFB451] rounded-lg text-[10px] uppercase tracking-widest font-bold transition-all cursor-pointer"
+                    >
+                      {t("Close")}
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 py-3 text-left">
+                    <p className="text-xs sm:text-sm font-bold font-mono tracking-wide text-[#FF0500] leading-relaxed">
+                      PDF Report and Export CSV is only available to registered AGT Travellers.
+                    </p>
+                    <p className="text-xs sm:text-sm font-bold font-mono tracking-wide text-[#FF0500] leading-relaxed">
+                      Enter your credentials in the setting menu
+                    </p>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowExportAuthErrorModal(false)}
+                    className="w-full py-3.5 mt-4 bg-transparent border-2 border-[#FF0500]/60 hover:border-[#FF0500] text-[#FFB451] hover:text-white rounded-xl text-xs uppercase tracking-widest font-black transition-all text-center flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {t("Close")}
+                  </button>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
             {/* Results Section - Full Width for Table */}
             <div className="w-full">
               <AnimatePresence mode="wait">
@@ -3567,11 +3795,11 @@ export default function App() {
                                 <th 
                                   key={idx} 
                                   onClick={() => toggleSort(col.name)}
-                                  className="py-3.5 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] whitespace-nowrap cursor-pointer hover:bg-[#FF0500]/10 hover:text-white transition-all group/th"
+                                  className="py-3.5 px-4 text-[0.625rem] uppercase tracking-widest font-bold text-[#FFB451] cursor-pointer hover:bg-[#FF0500]/10 hover:text-white transition-all group/th min-w-[125px] max-w-[220px]"
                                   title={`${t("Click to sort by")} ${t(col.name)}`}
                                 >
-                                  <div className="flex items-center gap-2 select-none">
-                                    <span>{t(col.name)}</span>
+                                  <div className="flex items-center justify-between gap-2 select-none">
+                                    <span className="line-clamp-3 break-words whitespace-normal leading-normal">{t(col.name)}</span>
                                     {isSorted ? (
                                       sortDirection === 'asc' ? (
                                         <ChevronUp className="w-3.5 h-3.5 text-[#FF0500] shrink-0" />
