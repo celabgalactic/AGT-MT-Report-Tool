@@ -47,7 +47,8 @@ const getColumnLetter = (colIndex: number): string => {
 const getColLabel = (colIdx: number, headerRow: string[] | undefined): string => {
   const letter = getColumnLetter(colIdx);
   const headerName = headerRow && headerRow[colIdx] ? headerRow[colIdx].trim() : '';
-  return headerName ? `[${letter}] ${headerName}` : `[${letter}] Column ${letter}`;
+  const cleanHeaderName = headerName ? headerName.replace(/^\[[A-Za-z0-9]+\]\s*/i, '') : '';
+  return cleanHeaderName ? cleanHeaderName : `Column ${letter}`;
 };
 
 const DETAILED_COL_INDICES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 34, 35];
@@ -462,17 +463,17 @@ const TRANSLATIONS: TranslationDict = {
     zh: "星际旅行者注册",
     it: "Registrazione del Viaggiatore AGT"
   },
-  "Save & Verify": {
-    en: "Save & Verify",
-    fr: "Enregistrer et Vérifier",
-    es: "Guardar y Verificar",
-    de: "Speichern & Verifizieren",
-    pt: "Salvar e Verificar",
-    th: "บันทึกและตรวจสอบ",
-    hi: "सहेजें और सत्यापित करें",
-    ja: "保存して確認",
-    zh: "保存并验证",
-    it: "Salva e Verifica"
+  "Verify & Save": {
+    en: "Verify & Save",
+    fr: "Vérifier et Enregistrer",
+    es: "Verificar y Guardar",
+    de: "Verifizieren & Speichern",
+    pt: "Verificar e Salvar",
+    th: "ตรวจสอบและบันทึก",
+    hi: "सत्यापित करें और सहेजें",
+    ja: "確認して保存",
+    zh: "验证并保存",
+    it: "Verifica e Salva"
   },
   "Reset": {
     en: "Reset",
@@ -850,6 +851,17 @@ const TRANSLATIONS: TranslationDict = {
     hi: "सभी साफ़ करें",
     ja: "すべてクリア",
     zh: "清除全部"
+  },
+  "Compiling AGT Intelligence Packet": {
+    en: "Compiling AGT Intelligence Packet",
+    fr: "Compilation du paquet de renseignements AGT",
+    es: "Compilando el paquete de inteligencia de AGT",
+    de: "Kompilierung des AGT-Intelligence-Pakets",
+    pt: "Compilando o pacote de inteligência da AGT",
+    th: "กำลังรวบรวมแพ็กเกจข้อมูลอัจฉเวช AGT",
+    hi: "एजीटी खुफिया पैकेट संकलित किया जा रहा है",
+    ja: "AGTインテリジェンス・パケットをコンパイル中",
+    zh: "编写AGT智能数据包"
   },
   "Region Name": {
     en: "Region Name",
@@ -2264,11 +2276,20 @@ export default function App() {
       }
 
       setShowVerificationModal(false);
-      if (exportType === 'pdf') {
-        triggerPdfDownloadProcessed();
-      } else {
-        triggerCsvDownloadProcessed();
-      }
+      setIsExporting(true);
+      setTimeout(async () => {
+        try {
+          if (exportType === 'pdf') {
+            await triggerPdfDownloadProcessed();
+          } else {
+            triggerCsvDownloadProcessed();
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setIsExporting(false);
+        }
+      }, 1800);
     } catch (err) {
       console.error(err);
       setVerificationError("Network error. Please try again.");
@@ -2294,7 +2315,7 @@ export default function App() {
         } finally {
           setIsExporting(false);
         }
-      }, 500);
+      }, 1800);
     } else {
       setShowExportAuthErrorModal(true);
     }
@@ -2317,7 +2338,7 @@ export default function App() {
         } finally {
           setIsExporting(false);
         }
-      }, 500);
+      }, 1800);
     } else {
       setShowExportAuthErrorModal(true);
     }
@@ -2808,41 +2829,6 @@ export default function App() {
                     )}
                   </AnimatePresence>
                 </div>
-
-                {/* Omit checkboxes */}
-                {savedTravellerName && savedTravellerId && (
-                  <div className="flex flex-wrap items-center gap-4 mt-2 text-xs font-mono text-[#FFB451] text-left">
-                    <label className="inline-flex items-center gap-2 cursor-pointer group">
-                      <input 
-                        type="checkbox"
-                        checked={omitPublicRecords}
-                        onChange={(e) => {
-                          setOmitPublicRecords(e.target.checked);
-                          if (e.target.checked) {
-                            setOmitPrivateRecords(false);
-                          }
-                        }}
-                        className="accent-[#FF0500] w-3.5 h-3.5 bg-[#2a2a2a] border border-[#FF0500]/45 rounded cursor-pointer transition-all focus:ring-1 focus:ring-[#FF0500]"
-                      />
-                      <span className="select-none group-hover:text-white transition-colors">Omit Public Records</span>
-                    </label>
-
-                    <label className="inline-flex items-center gap-2 cursor-pointer group">
-                      <input 
-                        type="checkbox"
-                        checked={omitPrivateRecords}
-                        onChange={(e) => {
-                          setOmitPrivateRecords(e.target.checked);
-                          if (e.target.checked) {
-                            setOmitPublicRecords(false);
-                          }
-                        }}
-                        className="accent-[#FF0500] w-3.5 h-3.5 bg-[#2a2a2a] border border-[#FF0500]/45 rounded cursor-pointer transition-all focus:ring-1 focus:ring-[#FF0500]"
-                      />
-                      <span className="select-none group-hover:text-white transition-colors">Omit Private Records</span>
-                    </label>
-                  </div>
-                )}
               </div>
 
               {/* Input 3: Region */}
@@ -3194,6 +3180,41 @@ export default function App() {
                     )}
                   </AnimatePresence>
                 </div>
+
+                {/* Omit checkboxes */}
+                {savedTravellerName && savedTravellerId && (
+                  <div className="flex flex-wrap items-center gap-4 mt-3 text-xs font-mono text-[#FFB451] text-left">
+                    <label className="inline-flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="checkbox"
+                        checked={omitPublicRecords}
+                        onChange={(e) => {
+                          setOmitPublicRecords(e.target.checked);
+                          if (e.target.checked) {
+                            setOmitPrivateRecords(false);
+                          }
+                        }}
+                        className="accent-[#FF0500] w-3.5 h-3.5 bg-[#2a2a2a] border border-[#FF0500]/45 rounded cursor-pointer transition-all focus:ring-1 focus:ring-[#FF0500]"
+                      />
+                      <span className="select-none group-hover:text-white transition-colors">Omit Public Records</span>
+                    </label>
+
+                    <label className="inline-flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="checkbox"
+                        checked={omitPrivateRecords}
+                        onChange={(e) => {
+                          setOmitPrivateRecords(e.target.checked);
+                          if (e.target.checked) {
+                            setOmitPublicRecords(false);
+                          }
+                        }}
+                        className="accent-[#FF0500] w-3.5 h-3.5 bg-[#2a2a2a] border border-[#FF0500]/45 rounded cursor-pointer transition-all focus:ring-1 focus:ring-[#FF0500]"
+                      />
+                      <span className="select-none group-hover:text-white transition-colors">Omit Private Records</span>
+                    </label>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -3426,10 +3447,11 @@ export default function App() {
                                   {DETAILED_COL_INDICES.slice(1).map(idx => {
                                     const letter = getColumnLetter(idx);
                                     const headerIndex = findHeaderRowIndex(allRawRows);
-                                    const headerName = allRawRows[headerIndex]?.[idx] || '';
-                                    const buttonText = headerName ? t(headerName) : `Column ${letter}`;
+                                    const headerRow = allRawRows[headerIndex];
+                                    const label = getColLabel(idx, headerRow);
+                                    const buttonText = t(label);
                                     const isEnabled = customToggles[idx] !== false;
-                                    const tooltipText = buttonText.replace(/^\[[A-Za-z0-9]+\]\s*/i, '');
+                                    const tooltipText = buttonText;
                                     
                                     return (
                                       <button
@@ -3510,7 +3532,7 @@ export default function App() {
                             disabled={isSettingsVerifying}
                             className="flex-1 py-3 bg-[#FF0500] hover:bg-[#FF0500]/85 border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.15)] disabled:opacity-50 flex items-center justify-center gap-2"
                           >
-                            {isSettingsVerifying ? t("Verifying...") : t("Save & Verify")}
+                            {isSettingsVerifying ? t("Verifying...") : t("Verify & Save")}
                           </button>
                           
                           <button
@@ -3717,6 +3739,33 @@ export default function App() {
                     {t("Close")}
                   </button>
                 </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Export Loader Modal */}
+          <AnimatePresence>
+            {isExporting && (
+              <div 
+                className="fixed inset-0 bg-black/95 backdrop-blur-md z-[250] flex flex-col items-center justify-center p-4 pointer-events-auto"
+              >
+                <div className="flex flex-col items-center justify-center space-y-6">
+                  <motion.div
+                    animate={{ rotateY: 360 }}
+                    transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                    className="w-24 h-24 flex items-center justify-center"
+                  >
+                    <img 
+                      src="/AGTIcon.png" 
+                      alt="AGT Logo" 
+                      className="w-24 h-24 object-contain shadow-[0_0_20px_rgba(255,180,81,0.2)]"
+                      referrerPolicy="no-referrer"
+                    />
+                  </motion.div>
+                  <p className="text-sm font-black tracking-[0.2em] uppercase text-[#FFB451] font-mono text-center">
+                    {t("Compiling AGT Intelligence Packet")}
+                  </p>
+                </div>
               </div>
             )}
           </AnimatePresence>
