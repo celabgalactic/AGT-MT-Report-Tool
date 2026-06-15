@@ -3699,44 +3699,38 @@ export default function App() {
           <AnimatePresence>
             {showExportAuthErrorModal && (
               <div 
-                className="fixed inset-0 bg-black/85 backdrop-blur-md z-[170] flex items-center justify-center p-4 pointer-events-auto"
+                className="fixed inset-0 bg-black/90 backdrop-blur-md z-[170] flex items-center justify-center p-4 pointer-events-auto"
                 onClick={() => setShowExportAuthErrorModal(false)}
               >
                 <motion.div 
-                  initial={{ scale: 0.9, opacity: 0, y: 15 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.9, opacity: 0, y: 15 }}
+                  initial={{ scale: 0.95, y: 15 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.95, y: 15 }}
                   transition={{ type: "spring", duration: 0.5 }}
-                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-md w-full p-6 shadow-2xl"
+                  className="relative bg-[#0d0d0d] border-2 border-[#FF0500] rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl space-y-5"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-5">
-                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FF0500] flex items-center gap-2">
-                      <ShieldAlert className="w-5 h-5 text-[#FF0500]" />
+                  <div className="mx-auto w-12 h-12 rounded-full bg-[#FF0500]/10 flex items-center justify-center border border-[#FF0500]/30 animate-pulse">
+                    <ShieldAlert className="w-6 h-6 text-[#FF0500]" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#FFB451]">
                       {t("Security Verification Error")}
                     </h3>
-                    <button 
-                      onClick={() => setShowExportAuthErrorModal(false)}
-                      className="px-4 py-2 bg-transparent text-[#FFB451]/60 hover:text-[#FFB451] rounded-lg text-[10px] uppercase tracking-widest font-bold transition-all cursor-pointer"
-                    >
-                      {t("Close")}
-                    </button>
-                  </div>
-
-                  <div className="space-y-3 py-3 text-left">
-                    <p className="text-xs sm:text-sm font-bold font-mono tracking-wide text-[#FF0500] leading-relaxed">
-                      PDF Report and Export CSV is only available to registered AGT Travellers.
+                    <p className="text-sm font-sans font-medium text-white/90 leading-relaxed">
+                      {t("PDF Report and Export CSV is only available to registered AGT Travellers.")}
                     </p>
-                    <p className="text-xs sm:text-sm font-bold font-mono tracking-wide text-[#FF0500] leading-relaxed">
-                      Enter your credentials in the setting menu
+                    <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#FF0500]/95">
+                      {t("Enter your credentials in the setting menu")}
                     </p>
                   </div>
 
                   <button 
                     onClick={() => setShowExportAuthErrorModal(false)}
-                    className="w-full py-3.5 mt-4 bg-transparent border-2 border-[#FF0500]/60 hover:border-[#FF0500] text-[#FFB451] hover:text-white rounded-xl text-xs uppercase tracking-widest font-black transition-all text-center flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-3 bg-[#FF0500] hover:bg-[#FF0500]/85 border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                   >
-                    {t("Close")}
+                    {t("Acknowledge")}
                   </button>
                 </motion.div>
               </div>
@@ -3746,27 +3740,36 @@ export default function App() {
           {/* Export Loader Modal */}
           <AnimatePresence>
             {isExporting && (
-              <div 
-                className="fixed inset-0 bg-black/95 backdrop-blur-md z-[250] flex flex-col items-center justify-center p-4 pointer-events-auto"
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/90 backdrop-blur-md z-[250] flex flex-col items-center justify-center p-4 pointer-events-auto"
               >
-                <div className="flex flex-col items-center justify-center space-y-6">
-                  <motion.div
-                    animate={{ rotateY: 360 }}
-                    transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-                    className="w-24 h-24 flex items-center justify-center"
-                  >
-                    <img 
-                      src="/AGTIcon.png" 
-                      alt="AGT Logo" 
-                      className="w-24 h-24 object-contain shadow-[0_0_20px_rgba(255,180,81,0.2)]"
-                      referrerPolicy="no-referrer"
-                    />
-                  </motion.div>
-                  <p className="text-sm font-black tracking-[0.2em] uppercase text-[#FFB451] font-mono text-center">
-                    {t("Compiling AGT Intelligence Packet")}
-                  </p>
-                </div>
-              </div>
+                <motion.img
+                  src="/AgtOfficialLogo.png"
+                  alt="AGT Official Logo"
+                  className="w-48 h-48 object-contain"
+                  initial={{ rotateY: 0, scale: 0.8 }}
+                  animate={{ rotateY: 360 * 3, scale: [0.8, 1.15, 0.8] }}
+                  exit={{ rotateY: 360 * 4, scale: 0, opacity: 0 }}
+                  transition={{ duration: 1.5, ease: "easeInOut", repeat: Infinity }}
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (img.src !== window.location.origin + "/AGTIcon.png") {
+                      img.src = "/AGTIcon.png";
+                    }
+                  }}
+                />
+                <motion.p
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3, duration: 0.5 }}
+                  className="text-[#FF0500] text-sm uppercase tracking-[0.25em] font-extrabold text-center mt-6"
+                >
+                  {t("Compiling AGT Intelligence Packet")}
+                </motion.p>
+              </motion.div>
             )}
           </AnimatePresence>
 
@@ -3982,9 +3985,6 @@ export default function App() {
                           <div className="w-1.5 h-1.5 rounded-full bg-[#FF0500] shadow-[0_0_8px_rgba(255,5,0,0.5)]"></div>
                           <span className="text-[9px] uppercase tracking-widest text-[#FFB451] font-bold">{t("Ledger Integrity: Verified")}</span>
                         </div>
-                        <span className="text-[9px] font-mono text-[#FFB451] uppercase tracking-widest hidden md:inline">
-                          {t("Index Reference:")} {Math.random().toString(16).substring(2, 8).toUpperCase()}
-                        </span>
                       </div>
                       <div className="text-[9px] uppercase tracking-[0.2em] font-mono text-[#FFB451]">
                         {t("AGT SECURE ARCHIVE CLIENT")}
