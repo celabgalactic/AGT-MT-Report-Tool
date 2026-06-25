@@ -25,7 +25,8 @@ import {
   ChevronUp,
   ChevronDown,
   RotateCcw,
-  ShieldAlert
+  ShieldAlert,
+  Bug
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
@@ -64,6 +65,66 @@ const findHeaderRowIndex = (rawRows: string[][]): number => {
     }
   }
   return 0; // Default fallback to first row
+};
+
+const DB_NAME = 'agt_db_cache_v1';
+const STORE_NAME = 'raw_rows_store';
+const DB_VERSION = 1;
+
+const openDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const saveCacheToIndexedDB = (rows: string[][]): Promise<void> => {
+  return openDB().then((db) => {
+    return new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put(rows, 'all_raw_rows');
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  });
+};
+
+const getCacheFromIndexedDB = (): Promise<string[][] | null> => {
+  return openDB().then((db) => {
+    return new Promise<string[][] | null>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get('all_raw_rows');
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  });
+};
+
+const formatCacheDate = (timestamp: number | null): string => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const day = String(date.getDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[date.getMonth()];
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+const formatCacheTime = (timestamp: number | null): string => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 };
 
 // Column configuration mapping
@@ -112,6 +173,30 @@ const TRANSLATIONS: TranslationDict = {
     ja: "AGT リージョンレポートツール",
     zh: "AGT 区域报告工具",
     it: "Strumento di Rapporto della Regione AGT"
+  },
+  "Cached": {
+    en: "Cached",
+    fr: "Mis en cache",
+    es: "Guardado en caché",
+    de: "Zwischengespeichert",
+    pt: "Em cache",
+    th: "แคชไว้",
+    hi: "कैश किया गया",
+    ja: "キャッシュ済み",
+    zh: "已缓存",
+    it: "In cache"
+  },
+  "Last Cache:": {
+    en: "Last Cache:",
+    fr: "Dernier cache :",
+    es: "Último caché:",
+    de: "Letzter Cache:",
+    pt: "Último cache:",
+    th: "แคชล่าสุด:",
+    hi: "अंतिम कैश:",
+    ja: "最終キャッシュ:",
+    zh: "最后缓存:",
+    it: "Ultima cache:"
   },
   "Traveller Name": {
     en: "Traveller Name",
@@ -653,6 +738,39 @@ const TRANSLATIONS: TranslationDict = {
     ja: "PDF出力",
     zh: "导出 PDF"
   },
+  "PDF Report": {
+    en: "PDF Report",
+    fr: "Rapport PDF",
+    es: "Informe PDF",
+    de: "PDF-Bericht",
+    pt: "Relatório PDF",
+    th: "รายงาน PDF",
+    hi: "पीडीएफ रिपोर्ट",
+    ja: "PDFレポート",
+    zh: "PDF 报告"
+  },
+  "Add to AGT Galactic Archives": {
+    en: "Add to AGT Galactic Archives",
+    fr: "Ajouter aux archives galactiques AGT",
+    es: "Añadir a los archivos galácticos de AGT",
+    de: "Zu den AGT Galactic Archives hinzufügen",
+    pt: "Adicionar aos arquivos galácticos da AGT",
+    th: "เพิ่มลงในคลังข้อมูลกาแลกติก AGT",
+    hi: "एजीटी गैलेक्टिक अभिलेखागार में जोड़ें",
+    ja: "AGT銀河アーカイブに追加",
+    zh: "添加到 AGT 星际档案"
+  },
+  "Contact AGT Support": {
+    en: "Contact AGT Support",
+    fr: "Contacter le support AGT",
+    es: "Contactar con el soporte de AGT",
+    de: "AGT-Support kontaktieren",
+    pt: "Contatar o suporte da AGT",
+    th: "ติดต่อฝ่ายสนับสนุน AGT",
+    hi: "एजीटी समर्थन से संपर्क करें",
+    ja: "AGTサポートに連絡",
+    zh: "联系 AGT 技术支持"
+  },
   "Export CSV": {
     en: "Export CSV",
     fr: "Exporter en CSV",
@@ -1193,6 +1311,24 @@ export default function App() {
   
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  const loadFromCache = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const cachedRows = await getCacheFromIndexedDB();
+      if (cachedRows && cachedRows.length >= 2) {
+        setAllRawRows(cachedRows);
+        setIsUsingCache(true);
+        setLoading(false);
+        return true;
+      }
+    } catch (err) {
+      console.error('Failed to load database from cache:', err);
+    }
+    setLoading(false);
+    return false;
+  };
+
   useEffect(() => {
     if (showSettings) {
       setSettingsTravellerName(savedTravellerName);
@@ -1202,7 +1338,14 @@ export default function App() {
 
   // Initial fetch and manual font loading
   useEffect(() => {
-    if (sheetUrl) {
+    const hasCache = !!localStorage.getItem('agt_cache_timestamp');
+    if (hasCache) {
+      loadFromCache().then((success) => {
+        if (!success && sheetUrl) {
+          fetchData();
+        }
+      });
+    } else if (sheetUrl) {
       fetchData();
     }
 
@@ -1334,6 +1477,11 @@ export default function App() {
     localStorage.setItem('agt_custom_toggles', JSON.stringify(customToggles));
   }, [customToggles]);
   const [allRawRows, setAllRawRows] = useState<string[][]>([]);
+  const [cacheTimestamp, setCacheTimestamp] = useState<number | null>(() => {
+    const saved = localStorage.getItem('agt_cache_timestamp');
+    return saved ? parseInt(saved, 10) : null;
+  });
+  const [isUsingCache, setIsUsingCache] = useState<boolean>(false);
   const [data, setData] = useState<any[]>([]);
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1656,6 +1804,17 @@ export default function App() {
 
           setAllRawRows(rawRows);
           setLoading(false);
+
+          const now = Date.now();
+          saveCacheToIndexedDB(rawRows)
+            .then(() => {
+              localStorage.setItem('agt_cache_timestamp', now.toString());
+              setCacheTimestamp(now);
+              setIsUsingCache(false);
+            })
+            .catch(err => {
+              console.error('Failed to save to cache:', err);
+            });
         },
         error: (err: any) => {
           setError(`Parsing error: ${err.message}`);
@@ -2511,14 +2670,23 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="hidden md:block text-[9px] text-[#FFB451] tracking-widest font-mono">
-              {t("STATUS:")} <span className={
-                loading ? 'text-yellow-500' :
-                sheetUrl ? 'text-emerald-500' : 
-                'text-red-500'
-              }>
-                {loading ? t('SYNCING') : sheetUrl ? t('CONNECTED') : t('DISCONNECTED')}
-              </span>
+            <div className="hidden md:block text-[9px] text-[#FFB451] tracking-widest font-mono text-right">
+              <div>
+                {t("STATUS:")}{' '}
+                <span className={
+                  loading ? 'text-yellow-500' :
+                  cacheTimestamp ? 'text-blue-500 font-bold' :
+                  sheetUrl ? 'text-emerald-500' : 
+                  'text-red-500'
+                }>
+                  {loading ? t('SYNCING') : cacheTimestamp ? t('Cached') : sheetUrl ? t('CONNECTED') : t('DISCONNECTED')}
+                </span>
+              </div>
+              {cacheTimestamp && !loading && (
+                <div className="text-[8px] text-blue-400 mt-0.5 tracking-wider font-mono">
+                  {formatCacheDate(cacheTimestamp)} {formatCacheTime(cacheTimestamp)}
+                </div>
+              )}
             </div>
             {savedTravellerName && savedTravellerId ? (
               <div 
@@ -2544,6 +2712,14 @@ export default function App() {
               </div>
             )}
             <button 
+              onClick={() => window.open("https://www.nms-agt.com/support", "_blank")}
+              className="p-2 hover:bg-[#FF0500]/10 rounded-lg transition-colors relative group cursor-pointer text-[#FF0500] border-0 bg-transparent shadow-none outline-none"
+              title={t("Contact AGT Support")}
+              id="support-bug-btn"
+            >
+              <Bug className="w-5 h-5" style={{ color: '#FF0500' }} />
+            </button>
+            <button 
               onClick={() => setShowSettings(!showSettings)}
               className="p-2 hover:bg-[#FF0500]/10 rounded-lg transition-colors relative group cursor-pointer"
               title="Settings"
@@ -2551,7 +2727,7 @@ export default function App() {
             >
               <Settings 
                 className="w-5 h-5 transition-transform duration-700 hover:rotate-360" 
-                style={{ color: '#FF0550' }} 
+                style={{ color: '#FF0500' }} 
               />
               {!sheetUrl && (
                 <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-[#FF0500] rounded-full shadow-[0_0_5px_rgba(255,5,0,0.5)]"></span>
@@ -2561,7 +2737,17 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-16">
+      <main className="max-w-5xl mx-auto px-6 py-16 relative">
+        {/* Contribute Button - At the upper right corner of the screen, after the header */}
+        <div className="absolute top-0 right-6 z-40 md:top-2">
+          <button
+            onClick={() => window.open("https://www.nms-agt.com/contribute", "_blank")}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-lg text-[8px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_8px_rgba(255,5,0,0.2)] hover:shadow-[0_0_15px_rgba(255,5,0,0.35)]"
+            title={t("Add to AGT Galactic Archives")}
+          >
+            <span>{t("Contribute")}</span>
+          </button>
+        </div>
         <div className="flex flex-col gap-16">
           
           {/* Main Search Logic Container - centered aesthetic */}
@@ -3287,7 +3473,7 @@ export default function App() {
                   {/* Close button inside modal header */}
                   <div className="flex justify-between items-center pb-4 border-b border-[#FF0500]/20 mb-6 font-mono">
                     <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#FFB451] flex items-center gap-2">
-                      <Settings className="w-5 h-5 text-[#FF0550] animate-spin" style={{ color: '#FF0550' }} />
+                      <Settings className="w-5 h-5 text-[#FF0500] animate-spin" style={{ color: '#FF0500' }} />
                       Control Settings
                     </h3>
                     <button 
@@ -3592,11 +3778,19 @@ export default function App() {
                         </h3>
                         <div className="space-y-4">
                           <button 
-                            onClick={fetchData}
+                            onClick={() => {
+                              setShowSettings(false);
+                              fetchData();
+                            }}
                             className="w-full py-4 bg-[#FF0500] border-2 border-[#FF0500] text-white rounded-xl text-[10px] uppercase tracking-widest font-black hover:bg-[#FF0500]/85 transition-all cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                           >
                             {t("Re-Sync Multi-Tool Data")}
                           </button>
+                          {cacheTimestamp && (
+                            <div className="text-[10px] text-blue-500 font-mono font-bold text-center mt-2">
+                              {t("Last Cache:")} {formatCacheDate(cacheTimestamp)} {formatCacheTime(cacheTimestamp)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3808,7 +4002,7 @@ export default function App() {
                             className="flex items-center gap-2 px-5 py-3 border-2 border-[#FF0500] bg-[#FF0500] text-white hover:bg-[#FF0500]/85 rounded-xl text-[10px] uppercase tracking-[0.15em] font-black transition-all active:scale-[0.98] cursor-pointer shadow-[0_0_15px_rgba(255,5,0,0.25)] hover:shadow-[0_0_25px_rgba(255,5,0,0.45)]"
                           >
                             <FileText className="w-3.5 h-3.5" />
-                            <span>{t("Export PDF")}</span>
+                            <span>{t("PDF Report")}</span>
                           </button>
                         )}
                         <button
@@ -3982,7 +4176,11 @@ export default function App() {
                     <div className="p-6 border-t border-[#FF0500]/20 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-[#FF0500]/[0.01]">
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#FF0500] shadow-[0_0_8px_rgba(255,5,0,0.5)]"></div>
+                          <div className={
+                            isUsingCache 
+                              ? "w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]"
+                              : "w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"
+                          }></div>
                           <span className="text-[9px] uppercase tracking-widest text-[#FFB451] font-bold">{t("Ledger Integrity: Verified")}</span>
                         </div>
                       </div>
